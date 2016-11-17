@@ -25,7 +25,9 @@ Genre
     PV    Promotionnal Video
     AMV   Anime Music Video
     LIVE  version LIVE
+    SPOIL vidéo présentant du SPOIL
 
+    COURT version COURte
     LONG  version LONGue
     INST  piste INSTrumentale disponible
     COVER COVER de la version originale
@@ -69,7 +71,7 @@ anime_pattern = r"^(?P<title_anime>.+?)(?: ~ (?P<subtitle_anime>.+?))? - (?P<gen
 anime_re = re.compile(anime_pattern, re.UNICODE)
 
 # Recherche les patterns de genre, dans le désordre, une seule fois
-genre_pattern = r"^(?=(?:.*(?:(?P<op>OP(?P<op_nbr>\d*))\b|(?P<ed>ED(?P<ed_nbr>\d*))\b|(?P<ins>INS)\b|(?P<is>IS)\b))?)(?=(?:.*(?:(?P<pv>PV)\b|(?P<amv>AMV)\b|(?P<live>LIVE)\b))?)(?=(?:.*(?P<long>LONG)\b)?)(?=(?:.*(?P<inst>INST)\b)?)(?=(?:.*(?P<cover>COVER)\b)?)(?=(?:.*(?P<remix>REMIX)\b)?).+"
+genre_pattern = r"^(?=(?:.*(?:(?P<op>OP(?P<op_nbr>\d*))\b|(?P<ed>ED(?P<ed_nbr>\d*))\b|(?P<ins>INS)\b|(?P<is>IS)\b))?)(?=(?:.*(?:(?P<pv>PV)\b|(?P<amv>AMV)\b|(?P<live>LIVE)\b))?)(?=(?:.*(?:(?P<court>COURT)\b|(?P<long>LONG)\b))?)(?=(?:.*(?P<inst>INST)\b)?)(?=(?:.*(?P<cover>COVER)\b)?)(?=(?:.*(?P<remix>REMIX)\b)?)(?=(?:.*(?P<spoil>SPOIL)\b)?).+"
 genre_re = re.compile(genre_pattern, re.UNICODE)
 
 
@@ -188,10 +190,12 @@ def genre_file2data(file):
                 'pv'     <bool> promotionnal video
                 'amv'    <bool> anime music video
                 'live'   <bool> version live
+                'court'  <bool> version courte
                 'long'   <bool> version longue
                 'inst'   <bool> piste instrumentale disponible
                 'cover'  <bool> cover de la version originale
                 'remix'  <bool> remix de la musique originale
+                'spoil'  <bool> présente du spoil
 """
     match = genre_re.match(file)
 
@@ -318,10 +322,12 @@ def genre_data2file(data, zeros = 0):
                 'pv'     <bool> promotionnal video
                 'amv'    <bool> anime music video
                 'live'   <bool> version live
+                'court'  <bool> version courte
                 'long'   <bool> version longue
                 'inst'   <bool> piste instrumentale disponible
                 'cover'  <bool> cover de la version originale
                 'remix'  <bool> remix de la musique originale
+                'spoil'  <bool> présente du spoil
             <zeros> ajout artificiel de 0 au numéro d'OP et d'ED
 
         sortie :
@@ -354,6 +360,8 @@ def genre_data2file(data, zeros = 0):
         genre.append('AMV')
     if data['live']:
         genre.append('LIVE')
+    if data['court']:
+        genre.append('COURT')
     if data['long']:
         genre.append('LONG')
     if data['inst']:
@@ -362,6 +370,8 @@ def genre_data2file(data, zeros = 0):
         genre.append('COVER')
     if data['remix']:
         genre.append('REMIX')
+    if data['spoil']:
+        genre.append('SPOIL')
     file = ' '.join(genre)
 
     return file
