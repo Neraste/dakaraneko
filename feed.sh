@@ -5,10 +5,13 @@
 #
 
 set -e
-DAKARA_SERVER_DIR=/path/to/dakara-server
-DAKARANEKO_DIR=/path/to/dakaraneko
-KARA_DIR=/path/to/karaoke_folder/
+
+: ${DAKARA_SERVER_DIR:=/path/to/dakara-server}
+: ${DAKARANEKO_DIR:=/path/to/dakaraneko}
+: ${KARA_DIR:=/path/to/karaoke_folder/}
+
 OPTIONS="--prune --append-only"
+
 cd ${DAKARA_SERVER_DIR}/dakara_server
 
 # Activate virtualenv (uncomment to use it)
