@@ -21,8 +21,8 @@ SUBDIRECTORIES = {
     "w_music": "Wmusic",
     "anime": "Anime",
     "live_action": "Live Action",
-    "game": "Jeux",
-    "cartoon": "Dessins animés",
+    "game": "Jeu",
+    "cartoon": "Dessin animé",
     "other": "Autre",
 }
 
@@ -138,7 +138,7 @@ class Song(BaseSong):
 
         # if directory cannot tell which convention to use, try each
         # conventions untill one works
-        for parser_class in (NekoParseMusic, NekoParseAnime, NekoParseCartoon):
+        for parser_class in (NekoParseMusic, NekoParseCartoon, NekoParseAnime):
             try:
                 self.parser = parser_class(self.video_path.stem)
                 self.parser.parse()
@@ -315,11 +315,13 @@ class Song(BaseSong):
         if self.subdirectory == SUBDIRECTORIES["anime"]:
             work_link["work"]["work_type"]["query_name"] = "anime"
 
-        elif self.SUBDIRECTORIES == SUBDIRECTORIES["live_action"]:
+        elif self.subdirectory == SUBDIRECTORIES["live_action"]:
             work_link["work"]["work_type"]["query_name"] = "live-action"
 
-        elif self.SUBDIRECTORIES == SUBDIRECTORIES["game"]:
+        elif self.subdirectory == SUBDIRECTORIES["game"]:
             work_link["work"]["work_type"]["query_name"] = "game"
+        else:
+            work_link["work"]["work_type"]["query_name"] = "anime"
 
         # comon anime/cartoon values
         self.set_work_anime_cartoon(work_link)
