@@ -1,13 +1,38 @@
+import logging
+
 from dakara_feeder.song import BaseSong
 
 from karaneko.nekoparse import (
-        NekoParseMusic, NekoParseTagsMusic, ConventionError
-        )
+    NekoParseMusic,
+    NekoParseTagsMusic,
+    NekoParseAnime,
+    NekoParseTagsAnime,
+    NekoParseCartoon,
+    NekoParseTagsCartoon,
+    ConventionError,
+)
 
 
-def default_if_error(func):
+logger = logging.getLogger(__name__)
+
+
+SUBDIRECTORIES = {
+    "cjk_music": "CJKmusic",
+    "w_music": "Wmusic",
+    "anime": "Anime",
+    "live_action": "Live Action",
+    "game": "Jeux",
+    "cartoon": "Dessins animés",
+    "other": "Autre",
+}
+
+
+def default_if_cannot_parse(func):
+    """Decorator forcing to return default value if the song cannot be parsed
+    """
+
     def call(self):
-        if self.parse_error:
+        if not self.can_parse:
             return getattr(super(self.__class__, self), func.__name__)()
 
         return func(self)
@@ -65,31 +90,69 @@ class Song(BaseSong):
     def pre_process(self):
         """Process preparative actions
 
-        This method should be overriden. By default, it does not do anything.
-
         This method is called at the beginning of `get_representation` and can
         be used to cache data in the instance.
         """
-        self.parse_error = False
+        self.can_parse = True
+
+        # get first relative subdirectory if possible
         if self.video_path.parent:
-            directory = self.video_path.splitall()[1]
+            self.subdirectory = self.video_path.splitall()[1]
 
         else:
-            directory = ""
+            self.subdirectory = ""
 
-        if directory in ("CJKmusic", "Wmusic"):
-            self.parser = NekoParseMusic(self.video_path.stem)
-            # TODO
-
+        # detect which parser to use based on directory
         try:
-            self.parser.parse()
-        except ConventionError:
-            self.parse_error = True
+            if self.subdirectory in (
+                SUBDIRECTORIES["cjk_music"],
+                SUBDIRECTORIES["w_music"],
+            ):
+                self.parser = NekoParseMusic(self.video_path.stem)
+                self.parser.parse()
+                return
+
+            if self.subdirectory in (
+                SUBDIRECTORIES["anime"],
+                SUBDIRECTORIES["live_action"],
+                SUBDIRECTORIES["game"],
+            ):
+                self.parser = NekoParseAnime(self.video_path.stem)
+                self.parser.parse()
+                return
+
+            if self.subdirectory in (SUBDIRECTORIES["cartoon"],):
+                self.parser = NekoParseCartoon(self.video_path.stem)
+                self.parser.parse()
+                return
+
+            if self.subdirectory in (SUBDIRECTORIES["other"],):
+                self.can_parse = False
+                return
+
+        # if error when parsing, mark song as not parsable
+        except ConventionError as error:
+            logger.warning("Error when parsing file %s: %s", self.video_path, error)
+            self.can_parse = False
+            return
+
+        # if directory cannot tell which convention to use, try each
+        # conventions untill one works
+        for parser_class in (NekoParseMusic, NekoParseAnime, NekoParseCartoon):
+            try:
+                self.parser = parser_class(self.video_path.stem)
+                self.parser.parse()
+                return
+
+            except ConventionError:
+                pass
+
+        # if no conventions seem to apply, mark song as not parsable
+        logger.warning("File %s has no detectable convention", self.video_path)
+        self.can_parse = False
 
     def post_process(self, representation):
         """Process final actions
-
-        This method should be overriden. By default, it does not do anything.
 
         This method is called at the end of `get_representation` and can be
         used to modify the representation.
@@ -100,42 +163,68 @@ class Song(BaseSong):
         """
         pass
 
-    @default_if_error
+    @default_if_cannot_parse
     def get_title(self):
         """Get the title
-
-        This method should be overriden. By default it returns the video file
-        name without extension.
 
         Returns:
             str: Title of the song.
         """
+        if isinstance(self.parser, NekoParseCartoon):
+            return self.get_title_cartoon()
+
         return self.parser.title_music
 
-    @default_if_error
+    def get_title_cartoon(self):
+        """Get the title for Cartoon convention
+        """
+        # take cartoon title if music cartoon is not known
+        return self.parser.title_music or self.parser.title_cartoon
+
+    @default_if_cannot_parse
     def get_artists(self):
         """Get the list of artists
-
-        This method should be overriden. By default it returns an empty list.
 
         Returns:
             list of dict: List of representations of artists. An artist is a
             dictionary containing only one key:
                 - name (str): The name of the artist.
         """
+        if isinstance(self.parser, NekoParseMusic):
+            return self.get_artists_music()
+
+        if isinstance(self.parser, (NekoParseAnime, NekoParseCartoon)):
+            return self.get_artists_anime()
+
+    def get_artists_music(self):
+        """Get the list of artists for Music convention
+        """
         artists = []
+
         artists.extend(self.parser.singers)
         artists.extend(self.parser.composers)
+
         if self.parser.extras.original_artist:
             artists.append(self.parser.extras.original_artist)
 
         return [{"name": artist} for artist in artists]
 
-    @default_if_error
+    def get_artists_anime(self):
+        """Get the list of artists for Anime convention
+        """
+        artists = []
+
+        if self.parser.extras.artist:
+            artists.append(self.parser.extras.artist)
+
+        if self.parser.extras.original_artist:
+            artists.append(self.parser.extras.original_artist)
+
+        return [{"name": artist} for artist in artists]
+
+    @default_if_cannot_parse
     def get_works(self):
         """Get the list of work links
-
-        This method should be overriden. By default it returns an empty list.
 
         Returns:
             list of dict: List of representations of work links. A work link is
@@ -172,18 +261,29 @@ class Song(BaseSong):
                             one key:
                                 - title (str): Alternative title of the work.
         """
-        # Use work information stored in extra details
+        if isinstance(self.parser, NekoParseMusic):
+            return self.get_works_music()
+
+        if isinstance(self.parser, NekoParseAnime):
+            return self.get_works_anime()
+
+        if isinstance(self.parser, NekoParseCartoon):
+            return self.get_works_cartoon()
+
+    def get_works_music(self):
+        """Get the list of work links for Music convention
+        """
         extras = self.parser.extras
         work_link = {"work": {"work_type": {"query_name": "anime"}}}
 
         if extras.opening:
             work_link["link_type"] = "OP"
-            work_link["link_type_nb"] = extras.opening_nbr
+            work_link["link_type_number"] = extras.opening_nbr
             work_link["work"]["title"] = extras.opening
 
         elif extras.ending:
             work_link["link_type"] = "ED"
-            work_link["link_type_nb"] = extras.ending_nbr
+            work_link["link_type_number"] = extras.ending_nbr
             work_link["work"]["title"] = extras.ending
 
         elif extras.insert_song:
@@ -194,16 +294,77 @@ class Song(BaseSong):
             work_link["link_type"] = "IS"
             work_link["work"]["title"] = extras.image_song
 
+        # return this work link if it exists
         if work_link.get("link_type"):
             return [work_link]
 
-        return []
+        # otherwise just return default value
+        return super().get_works()
 
-    @default_if_error
+    def get_works_anime(self):
+        """Get the list of work links for Anime convention
+        """
+        work_link = {"work": {"work_type": {}}}
+
+        # specific anime values
+        work_link["work"]["title"] = self.parser.title_anime
+
+        if self.parser.subtitle_anime:
+            work_link["work"]["subtitle"] = self.parser.subtitle_anime
+
+        if self.subdirectory == SUBDIRECTORIES["anime"]:
+            work_link["work"]["work_type"]["query_name"] = "anime"
+
+        elif self.SUBDIRECTORIES == SUBDIRECTORIES["live_action"]:
+            work_link["work"]["work_type"]["query_name"] = "live-action"
+
+        elif self.SUBDIRECTORIES == SUBDIRECTORIES["game"]:
+            work_link["work"]["work_type"]["query_name"] = "game"
+
+        # comon anime/cartoon values
+        self.set_work_anime_cartoon(work_link)
+
+        return [work_link]
+
+    def get_works_cartoon(self):
+        """Get the list of work links for Cartoon convention
+        """
+        work_link = {"work": {"work_type": {"query_name": "cartoon"}}}
+
+        # specific cartoon values
+        work_link["work"]["title"] = self.parser.title_cartoon
+
+        if self.parser.subtitle_cartoon:
+            work_link["work"]["subtitle"] = self.parser.subtitle_cartoon
+
+        # comon anime/cartoon values
+        self.set_work_anime_cartoon(work_link)
+
+        return [work_link]
+
+    def set_work_anime_cartoon(self, work_link):
+        """Common function to set work for Anime and Cartoon conventions
+        """
+        tags = self.parser.tags
+        work_link["episodes"] = self.parser.extras.episodes
+
+        if tags.opening:
+            work_link["link_type"] = "OP"
+            work_link["link_type_number"] = tags.opening_nbr
+
+        elif tags.ending:
+            work_link["link_type"] = "ED"
+            work_link["link_type_number"] = tags.ending_nbr
+
+        elif tags.insert_song:
+            work_link["link_type"] = "IN"
+
+        elif tags.image_song:
+            work_link["link_type"] = "IS"
+
+    @default_if_cannot_parse
     def get_tags(self):
         """Get the list of tags
-
-        This method should be overriden. By default it returns an empty list.
 
         Returns:
             list of dict: List of representations of tags. A tag is a ditionary
@@ -211,6 +372,15 @@ class Song(BaseSong):
                 - name (str): Name of the tag;
                 - color_hue (int): Visual hue of the tag (not mandatory);
                 - disabled (bool): True if the tag is disabled (not mandatory).
+        """
+        if isinstance(self.parser, NekoParseMusic):
+            return self.get_tags_music()
+
+        if isinstance(self.parser, (NekoParseAnime, NekoParseCartoon)):
+            return self.get_tags_anime()
+
+    def get_tags_music(self):
+        """Get the list of tags for Music convention
         """
         tags_list = []
 
@@ -220,33 +390,55 @@ class Song(BaseSong):
 
         return tags_list
 
-    @default_if_error
+    def get_tags_anime(self):
+        """Get the list of tags for Anime convention
+        """
+        tags_list = []
+
+        for tag in NekoParseTagsAnime.tags:
+            if tag["category"] == "use":
+                # ignore use tags
+                continue
+
+            if getattr(self.parser.tags, tag["name"]):
+                tags_list.append({"name": tag["serializer"]})
+
+        return tags_list
+
+    @default_if_cannot_parse
     def get_version(self):
         """Get the version
-
-        This method should be overriden. By default it returns an empty string.
 
         Returns:
             str: Version of the song.
         """
+        if isinstance(self.parser, NekoParseCartoon):
+            return self.get_version_cartoon()
+
         return self.parser.extras.version
 
-    @default_if_error
+    def get_version_cartoon(self):
+        """Get the version for Cartoon convention
+        """
+        # concatenate version and language
+        return ", ".join(
+            value
+            for value in (self.parser.extras.version, self.parser.language)
+            if value
+        )
+
+    @default_if_cannot_parse
     def get_detail(self):
         """Get the datail
-
-        This method should be overriden. By default it returns an empty string.
 
         Returns:
             str: Detail about the song.
         """
         return self.parser.details
 
-    @default_if_error
+    @default_if_cannot_parse
     def get_detail_video(self):
         """Get the datail of the video
-
-        This method should be overriden. By default it returns an empty string.
 
         Returns:
             str: Detail about the video.
