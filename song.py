@@ -20,7 +20,7 @@ SUBDIRECTORIES = {
     "cjk_music": "CJKmusic",
     "w_music": "Wmusic",
     "anime": "Anime",
-    "live_action": "Live Action",
+    "live_action": "Live action",
     "game": "Jeu",
     "cartoon": "Dessin animé",
     "other": "Autre",
