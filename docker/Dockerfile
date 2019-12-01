@@ -1,9 +1,5 @@
 FROM python:3.6
 
-RUN apt-get update \
-    && apt-get install -y ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY docker/get_dakara.sh /
 RUN chmod u+x get_dakara.sh && /get_dakara.sh
 

@@ -12,6 +12,5 @@ if [ "$1" == "install" ]; then
   /dakara-server/dakara_server/manage.py createtags /dakaraneko/config.yaml
   /dakara-server/dakara_server/manage.py createworktypes /dakaraneko/config.yaml
 elif [ "$1" == "run" ]; then
-  /dakaraneko/feed.sh
   /dakara-server/dakara_server/manage.py runserver 0.0.0.0:22222
 fi
