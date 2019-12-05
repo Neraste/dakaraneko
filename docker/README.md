@@ -52,7 +52,8 @@ To start the server, simply start the container with compose from this directory
 docker-compose up
 ```
 
-This will also manage the feeding of the database, so the first start might take a **very** long time depending on the number of karas you own.
-
 To stop the server, simply type `^C` and wait for a bit.
 
+### Server feed
+
+Use [dakara-feeder](https://github.com/DakaraProject/dakara-feeder) to feed the server database (please follow the documentation of this project). Beware, as the first feed might take a **very** long time depending on the number of karas you own.
